@@ -27,6 +27,26 @@ typedef struct {
 	char* value;
 } Token;
 
+typedef enum {
+	NODE_LITERAL,		//single character and escape
+	NODE_ALTERNATION,	//(a|b)
+	NODE_REPETITION,	//(*, +, ?, {n,m})
+	NODE_GROUP,		//()
+	NODE_CHARACTER_CLASS,	//[a-z] [abc] etc..
+	NODE_WILDCARD,		//.
+	NODE_NEGATED_CLASS,	//[^abc]
+	NODE_REGEX,		//entire expression
+} NodeType;
+
+typedef struct ASTNode {
+	NodeType type;
+	char *value;
+	int minRepetitions;
+	int maxRepetitions;
+	struct RegexASTNode *left;
+	struct RegexASTNode *right;
+} ASTNode;
+
 Token* Tokenize(const char *regex, int *tokCount) {
 	const char *p = regex;
 	int length = strlen(regex);
@@ -135,12 +155,20 @@ Token* Tokenize(const char *regex, int *tokCount) {
 	return tokens;
 }
 
+ASTNode *Parse(const Token* tokens, int tokenCount) {
+	const Token* token = tokens;
+	ASTNode *regex = malloc(sizeof(ASTNode));
+	regex->type = NODE_REGEX;
+	return regex;
+}
+
 int main() {
 	//const char *regex = "\\/\\*\\*.*?[^\\/]\\*\\*\\/"; // regex for matching multiline comments in /** **/ form
 	const char *regex = "\\(\\d{3}\\) \\d{3}-\\d{4}"; // regex for matching phone numbers
 	int tokenCount = 0;
-	Token* tokens = Tokenize(regex, &tokenCount);
+	const Token* tokens = Tokenize(regex, &tokenCount);
 	for (int i = 0; i < tokenCount; i++) {
 		printf("Token %d; %s\n", i, tokens[i].value);
 	}
+	ASTNode *parsedRegex = Parse(tokens, tokenCount);
 }
