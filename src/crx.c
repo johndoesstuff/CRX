@@ -30,12 +30,14 @@ typedef struct {
 typedef enum {
 	NODE_LITERAL,		//single character and escape
 	NODE_ALTERNATION,	//(a|b)
+	NODE_SUBEXPRESSION,
 	NODE_REPETITION,	//(*, +, ?, {n,m})
 	NODE_GROUP,		//()
 	NODE_CHARACTER_CLASS,	//[a-z] [abc] etc..
 	NODE_WILDCARD,		//.
 	NODE_NEGATED_CLASS,	//[^abc]
 	NODE_REGEX,		//entire expression
+	NODE_EXPRESSION,
 } NodeType;
 
 typedef struct ASTNode {
@@ -43,8 +45,8 @@ typedef struct ASTNode {
 	char *value;
 	int minRepetitions;
 	int maxRepetitions;
-	struct RegexASTNode *left;
-	struct RegexASTNode *right;
+	struct ASTNode *left;
+	struct ASTNode *right;
 } ASTNode;
 
 Token* Tokenize(const char *regex, int *tokCount) {
@@ -155,11 +157,47 @@ Token* Tokenize(const char *regex, int *tokCount) {
 	return tokens;
 }
 
+Token Peek(const Token* tokens, int *position) {
+	return tokens[*position];
+}
+
+Token Consume(TokenType type, const Token* tokens, int *position) {
+	if (Peek(tokens, position)->type == type) {
+		return tokens[(*position)++];
+	} else {
+		printf("Tried to consume token of type %d but found %d", type, Peek(tokens, position)->type);
+		exit(1);
+	}
+}
+
 ASTNode *Parse(const Token* tokens, int tokenCount) {
 	const Token* token = tokens;
 	ASTNode *regex = malloc(sizeof(ASTNode));
+	int position = 0;
 	regex->type = NODE_REGEX;
+	regex->left = ConsumeExpression(tokens, tokenCount, &position);
 	return regex;
+}
+
+ASTNode *ConsumeExpression(const Token* tokens, int tokenCount, int *position) {
+	ASTNode *node = malloc(sizeof(ASTNode));
+	node->type = NODE_EXPRESSION;
+	node->left = ConsumeSubExpression(tokens, tokenCount, position);
+	if (Peek(tokens, position).type == TOKEN_ALTERNATOR) {
+		Consume(TOKEN_ALTERNATOR, tokens, position);
+		node->right = ConsumeExpression(tokens, tokenCount, position);
+	}
+	return node;
+}
+
+ASTNode *ConsumeSubExpression(const Token* tokens, int tokenCount, int *position) {
+	ASTNode *node = malloc(sizeof(ASTNode));
+	node->type = NODE_SUBEXPRESSION;
+	node->left = ConsumeSubExpressionItem(tokens, tokenCount, position);
+	if (ConsumeSubExpression(tokens, tokenCount, position)) {
+		node->right = ConsumeSubExpression(tokens, tokenCount, position);
+	}
+	return node;
 }
 
 int main() {
