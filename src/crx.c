@@ -38,11 +38,12 @@ typedef enum {
 	NODE_NEGATED_CLASS,	//[^abc]
 	NODE_REGEX,		//entire expression
 	NODE_EXPRESSION,
+	NODE_MATCH,
 } NodeType;
 
 typedef struct ASTNode {
 	NodeType type;
-	char *value;
+	Token *value;
 	int minRepetitions;
 	int maxRepetitions;
 	struct ASTNode *left;
@@ -157,20 +158,20 @@ Token* Tokenize(const char *regex, int *tokCount) {
 	return tokens;
 }
 
-Token Peek(const Token* tokens, int *position) {
-	return tokens[*position];
+Token *Peek(const Token* tokens, int *position) {
+	return &tokens[*position];
 }
 
-Token Consume(TokenType type, const Token* tokens, int *position) {
+Token *Consume(TokenType type, const Token* tokens, int *position) {
 	if (Peek(tokens, position)->type == type) {
-		return tokens[(*position)++];
+		return &tokens[(*position)++];
 	} else {
 		printf("Tried to consume token of type %d but found %d", type, Peek(tokens, position)->type);
 		exit(1);
 	}
 }
 
-ASTNode *Parse(const Token* tokens, int tokenCount) {
+ASTNode *Parse(const Token* tokens, int tokenCount) { //shoutout https://github.com/kean/Regex/blob/main/grammar.ebnf
 	const Token* token = tokens;
 	ASTNode *regex = malloc(sizeof(ASTNode));
 	int position = 0;
@@ -180,9 +181,18 @@ ASTNode *Parse(const Token* tokens, int tokenCount) {
 }
 
 ASTNode *ConsumeExpression(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
 	ASTNode *node = malloc(sizeof(ASTNode));
 	node->type = NODE_EXPRESSION;
 	node->left = ConsumeSubExpression(tokens, tokenCount, position);
+	if (!node->left) {
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
 	if (Peek(tokens, position).type == TOKEN_ALTERNATOR) {
 		Consume(TOKEN_ALTERNATOR, tokens, position);
 		node->right = ConsumeExpression(tokens, tokenCount, position);
@@ -191,11 +201,66 @@ ASTNode *ConsumeExpression(const Token* tokens, int tokenCount, int *position) {
 }
 
 ASTNode *ConsumeSubExpression(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
 	ASTNode *node = malloc(sizeof(ASTNode));
 	node->type = NODE_SUBEXPRESSION;
 	node->left = ConsumeSubExpressionItem(tokens, tokenCount, position);
-	if (ConsumeSubExpression(tokens, tokenCount, position)) {
-		node->right = ConsumeSubExpression(tokens, tokenCount, position);
+	if (!node->left) {
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
+	node->right = ConsumeSubExpression(tokens, tokenCount, position);
+	return node;
+}
+
+ASTNode *ConsumeSubExpressionItem(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
+	ASTNode *node = malloc(sizeof(ASTNode));
+	node = ConsumeMatch(tokens, tokenCount, position);
+	if (!node) node = ConsumeGroup(tokens, tokenCount, position);
+	if (!node) node = ConsumeAnchor(tokens, tokenCount, position);
+	if (!node) node = ConsumeBackreference(tokens, tokenCount, position);
+	if (!node) {
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
+	return node;
+}
+
+ASTNode *ConsumeMatch(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
+	ASTNode *node = malloc(sizeof(ASTNode));
+	node->left = ConsumeMatchItem(tokens, tokenCount, position);
+	node->right = ConsumeQuantifier(tokens, tokenCount, position);
+	node->type = NODE_MATCH;
+	if (!node->left) {
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
+	return node;
+}
+
+ASTNode *ConsumeMatchItem(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
+	ASTNode *node = malloc(sizeof(ASTNode));
+	if (Peek(tokens, position).type = TOKEN_WILDCARD) {
+		node->value = Consume(TOKEN_WILDCARD, tokens, position);
+		node->type = NODE_WILDCARD;
 	}
 	return node;
 }
