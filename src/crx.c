@@ -171,6 +171,81 @@ const Token *Consume(TokenType type, const Token* tokens, int *position) {
 	}
 }
 
+ASTNode *ConsumeCharacterGroupItem(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	ASTNode *node = malloc(sizeof(ASTNode));
+	node = ConsumeCharacterClass(tokens, tokenCount, position);
+	if (!node) node = ConsumeCharacterRange(tokens, tokenCount, position);
+	Token* token = Peek(tokens, position);
+	if (token->type == TOKEN_RBRACK) {
+		free(node);
+		*position = startPos;
+		return NULL;
+	} else if (token->type == TOKEN_LITERAL) {
+		node = Consume(TOKEN_LITERAL, tokens, position);
+	} else {
+		printf("whoops something has gone wrong");
+		exit(1);
+	}
+}
+
+ASTNode *ConsumeCharacterGroupItemList(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	ASTNode *node = malloc(sizeof(ASTNode));
+	node->left = ConsumeCharacterGroupItem(tokens, tokenCount, position);
+	if (!node->left) {
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
+	node->right = ConsumeCharacterGroupItemList(tokens, tokenCount, position);
+	return node;
+}
+
+ASTNode *ConsumeCharacterGroup(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	Token* token = Peek(tokens, position);
+	if (token->type != TOKEN_LBRACK) {
+		return NULL;
+	}
+	ASTNode *node = malloc(sizeof(ASTNode));
+	Consume(TOKEN_LBRACK, tokens, position);
+	node->left = ConsumeCharacterGroupNegativeModifier(tokens, tokenCount, position); // 0 or 1
+	node->right = ConsumeCharacterGroupItemList(tokens, tokenCount, position); // required
+	if (!node->right) {
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
+	return node;
+}
+
+ASTNode *ConsumeMatchCharacterClass(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
+	ASTNode *node = malloc(sizeof(ASTNode));
+	node = ConsumeCharacterGroup(tokens, tokenCount, position);
+	if (!node) node = ConsumeCharacterClass(tokens, tokenCount, position);
+	if (!node) {
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
+	return node;
+}
+
+ASTNode *ConsumeMatchCharacter(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	Token* token = Peek(tokens, position);
+	if (token->type == TOKEN_LITERAL) {
+		return Consume(TOKEN_LITERAL, tokens, position);
+	}
+	*position = startPos;
+	return NULL;
+}
+
 ASTNode *ConsumeMatchItem(const Token* tokens, int tokenCount, int *position) {
 	int startPos = *position;
 	if (*position >= tokenCount) {
@@ -180,6 +255,13 @@ ASTNode *ConsumeMatchItem(const Token* tokens, int tokenCount, int *position) {
 	if (Peek(tokens, position)->type == TOKEN_WILDCARD) {
 		node->value = Consume(TOKEN_WILDCARD, tokens, position);
 		node->type = NODE_WILDCARD;
+	}
+	if (!node->value) node = ConsumeMatchCharacterClass(tokens, tokenCount, position);
+	if (!node) node = ConsumeMatchCharacter(tokens, tokenCount, position);
+	if (!node) {
+		free(node);
+		*position = startPos;
+		return NULL;
 	}
 	return node;
 }
