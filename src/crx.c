@@ -39,6 +39,7 @@ typedef enum {
 	NODE_REGEX,		//entire expression
 	NODE_EXPRESSION,
 	NODE_MATCH,
+	NODE_ATOM,
 } NodeType;
 
 typedef struct ASTNode {
@@ -171,6 +172,56 @@ const Token *Consume(TokenType type, const Token* tokens, int *position) {
 	}
 }
 
+ASTNode *MakeAtom(const Token* token) {
+	ASTNode *node = malloc(sizeof(ASTNode));
+	node->type = NODE_ATOM;
+	node->value = token->value;
+	return node;
+}
+
+ASTNode *ConsumeCharacterRange(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	ASTNode *node = malloc(sizeof(ASTNode));
+	Token* token = Peek(tokens, position);
+	if (token->type != TOKEN_LITERAL) {
+		free(node);
+		return NULL;
+	}
+	node->left = MakeAtom(Consume(TOKEN_LITERAL, tokens, position));
+	token = Peek(tokens, position);
+	if (token->value[0] != '-') {
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
+	Consume(TOKEN_LITERAL, tokens, position);
+	token = Peek(tokens, position);
+	if (token->type != TOKEN_LITERAL) {
+		free(node->left);
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
+	node->right = MakeAtom(Consume(TOKEN_LITERAL, tokens, position));
+	return node;
+}
+
+ASTNode *ConsumeCharacterClass(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	ASTNode *node = malloc(sizeof(ASTNode));
+	Token* token = Peek(tokens, position);
+	if (token->type == TOKEN_ESCAPE_SEQUENCE) {
+		char c = token->value[1];
+		if (c == 'w' || c == 'W' || c == 'd' || c == 'D') {
+			node->value = token;
+			return node;
+		}
+	}
+	free(node);
+	*position = startPos;
+	return NULL;
+}
+
 ASTNode *ConsumeCharacterGroupItem(const Token* tokens, int tokenCount, int *position) {
 	int startPos = *position;
 	ASTNode *node = malloc(sizeof(ASTNode));
@@ -187,6 +238,12 @@ ASTNode *ConsumeCharacterGroupItem(const Token* tokens, int tokenCount, int *pos
 		printf("whoops something has gone wrong");
 		exit(1);
 	}
+	if (!node) {
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
+	return node;
 }
 
 ASTNode *ConsumeCharacterGroupItemList(const Token* tokens, int tokenCount, int *position) {
