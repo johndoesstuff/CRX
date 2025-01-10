@@ -175,12 +175,41 @@ const Token *Consume(TokenType type, const Token* tokens, int *position) {
 ASTNode *MakeAtom(const Token* token) {
 	ASTNode *node = malloc(sizeof(ASTNode));
 	node->type = NODE_ATOM;
-	node->value = token->value;
+	node->value = token;
+	return node;
+}
+
+ASTNode *ConsumeQuantifier(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
+	ASTNode *node = malloc(sizeof(ASTNode));
+	Token* token = Peek(tokens, position);
+	if (token->type != TOKEN_ASTERISK && token->type != TOKEN_PLUS && token->type != TOKEN_QUESTION) {
+		free(node);
+		startPos = *position;
+		return NULL;
+	}
+	if (token->type == TOKEN_ASTERISK) {
+		node->left = MakeAtom(Consume(TOKEN_ASTERISK, tokens, position));
+	} else if (token->type == TOKEN_PLUS) {
+		node->left = MakeAtom(Consume(TOKEN_PLUS, tokens, position));
+	} else if (token->type == TOKEN_QUESTION) {
+		node->left = MakeAtom(Consume(TOKEN_QUESTION, tokens, position));
+	}
+	token = Peek(tokens, position);
+	if (token->type == TOKEN_QUESTION) {
+		node->right = MakeAtom(Consume(TOKEN_QUESTION, tokens, position));
+	}
 	return node;
 }
 
 ASTNode *ConsumeCharacterRange(const Token* tokens, int tokenCount, int *position) {
 	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
 	ASTNode *node = malloc(sizeof(ASTNode));
 	Token* token = Peek(tokens, position);
 	if (token->type != TOKEN_LITERAL) {
@@ -208,6 +237,9 @@ ASTNode *ConsumeCharacterRange(const Token* tokens, int tokenCount, int *positio
 
 ASTNode *ConsumeCharacterClass(const Token* tokens, int tokenCount, int *position) {
 	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
 	ASTNode *node = malloc(sizeof(ASTNode));
 	Token* token = Peek(tokens, position);
 	if (token->type == TOKEN_ESCAPE_SEQUENCE) {
@@ -224,6 +256,9 @@ ASTNode *ConsumeCharacterClass(const Token* tokens, int tokenCount, int *positio
 
 ASTNode *ConsumeCharacterGroupItem(const Token* tokens, int tokenCount, int *position) {
 	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
 	ASTNode *node = malloc(sizeof(ASTNode));
 	node = ConsumeCharacterClass(tokens, tokenCount, position);
 	if (!node) node = ConsumeCharacterRange(tokens, tokenCount, position);
@@ -248,6 +283,9 @@ ASTNode *ConsumeCharacterGroupItem(const Token* tokens, int tokenCount, int *pos
 
 ASTNode *ConsumeCharacterGroupItemList(const Token* tokens, int tokenCount, int *position) {
 	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
 	ASTNode *node = malloc(sizeof(ASTNode));
 	node->left = ConsumeCharacterGroupItem(tokens, tokenCount, position);
 	if (!node->left) {
@@ -261,13 +299,19 @@ ASTNode *ConsumeCharacterGroupItemList(const Token* tokens, int tokenCount, int 
 
 ASTNode *ConsumeCharacterGroup(const Token* tokens, int tokenCount, int *position) {
 	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
 	Token* token = Peek(tokens, position);
 	if (token->type != TOKEN_LBRACK) {
 		return NULL;
 	}
 	ASTNode *node = malloc(sizeof(ASTNode));
 	Consume(TOKEN_LBRACK, tokens, position);
-	node->left = ConsumeCharacterGroupNegativeModifier(tokens, tokenCount, position); // 0 or 1
+	token = Peek(tokens, position);
+	if (token->type == TOKEN_CARET) {
+		node->left = Consume(TOKEN_CARET, tokens, position); // 0 or 1
+	}
 	node->right = ConsumeCharacterGroupItemList(tokens, tokenCount, position); // required
 	if (!node->right) {
 		free(node);
