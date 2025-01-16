@@ -179,6 +179,20 @@ ASTNode *MakeAtom(const Token* token) {
 	return node;
 }
 
+ASTNode *ConsumeAnchor(const Token* tokens, int tokenCount, int *position) {	
+	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
+	ASTNode *node = malloc(sizeof(ASTNode));
+	Token* token = Peek(tokens, position);
+	if (token->type != TOKEN_ESCAPE_SEQUENCE) {
+		free(node);
+		*position = startPos;
+		return NULL
+	}
+}
+
 ASTNode *ConsumeQuantifier(const Token* tokens, int tokenCount, int *position) {
 	int startPos = *position;
 	if (*position >= tokenCount) {
@@ -188,7 +202,7 @@ ASTNode *ConsumeQuantifier(const Token* tokens, int tokenCount, int *position) {
 	Token* token = Peek(tokens, position);
 	if (token->type != TOKEN_ASTERISK && token->type != TOKEN_PLUS && token->type != TOKEN_QUESTION) {
 		free(node);
-		startPos = *position;
+		*position = startPos;
 		return NULL;
 	}
 	if (token->type == TOKEN_ASTERISK) {
