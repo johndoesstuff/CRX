@@ -20,6 +20,7 @@ typedef enum {
 	TOKEN_ESCAPE_SEQUENCE,
 	TOKEN_CARET,
 	TOKEN_QUESTION,
+	TOKEN_DOLLAR,
 } TokenType;
 
 typedef struct {
@@ -76,7 +77,13 @@ Token* Tokenize(const char *regex, int *tokCount) {
 			tok->value = malloc(2);
 			tok->value[0] = *p;
 			tok->value[1] = '\0';
-		} else if (*p == '.') {
+		} else if (*p == '$') {
+			//printf("TOKEN_DOLLAR : %c\n", *p);
+			tok->type = TOKEN_DOLLAR;
+			tok->value = malloc(2);
+			tok->value[0] = *p;
+			tok->value[1] = '\0';
+		}else if (*p == '.') {
 			//printf("TOKEN_WILDCARD : %c\n", *p);
 			tok->type = TOKEN_WILDCARD;
 			tok->value = malloc(2);
@@ -186,11 +193,23 @@ ASTNode *ConsumeAnchor(const Token* tokens, int tokenCount, int *position) {
 	}
 	ASTNode *node = malloc(sizeof(ASTNode));
 	Token* token = Peek(tokens, position);
-	if (token->type != TOKEN_ESCAPE_SEQUENCE) {
+	if (token->type != TOKEN_ESCAPE_SEQUENCE && token->type != TOKEN_DOLLAR) {
 		free(node);
 		*position = startPos;
-		return NULL
+		return NULL;
 	}
+	if (token->type == TOKEN_DOLLAR) {
+		node->value = Consume(TOKEN_DOLLAR, tokens, position);
+		return node;
+	}
+	char c = token->value[1];
+	if (c == 'b' || c == 'B' || c == 'A' || c == 'z' || c == 'Z' || c == 'G') {
+		node->value = Consume(TOKEN_ESCAPE_SEQUENCE, tokens, position);
+		return node;
+	}
+	free(node);
+	*position = startPos;
+	return NULL;
 }
 
 ASTNode *ConsumeQuantifier(const Token* tokens, int tokenCount, int *position) {
