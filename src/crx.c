@@ -186,6 +186,57 @@ ASTNode *MakeAtom(const Token* token) {
 	return node;
 }
 
+ASTNode *ConsumeGroupInner(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
+	ASTNode *node = malloc(sizeof(ASTNode));
+	//check GroupNonCapturingModifier
+	Token* token = Peek(tokens, position);
+	if (token->type == TOKEN_QUESTION) {
+		Consume(TOKEN_QUESTION, tokens, position);
+		token = Peek(tokens, position);
+		if (token->value[0] == ':') {
+			token->left = MakeAtom(Consume(TOKEN_LITERAL, tokens, position));
+		} else {
+			printf("expected ?: for group noncapturing modifier");
+			exit(1);
+		}
+	}
+	token->right = ConsumeExpression(tokens, tokenCount, position);
+}
+
+ASTNode *ConsumeGroup(const Token* tokens, int tokenCount, int *position) {
+	int startPos = *position;
+	if (*position >= tokenCount) {
+		return NULL;
+	}
+	ASTNode *node = malloc(sizeof(ASTNode));
+	Token* token = Peek(tokens, position);
+	if (token->type != TOKEN_LPAREN) {
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
+	Consume(TOKEN_LPAREN, tokens, position);
+	node->left = ConsumeGroupInner(tokens, tokenCount, position);
+	if (node->left == NULL) {
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
+	token = Peek(tokens, position);
+	if (token->type != TOKEN_RPAREN) {
+		free(node);
+		*position = startPos;
+		return NULL;
+	}
+	Consume(TOKEN_RPAREN, tokens, position);
+	node->right = ConsumeQuantifier(tokens, tokenCount, position); //optional
+	return node;
+}
+
 ASTNode *ConsumeAnchor(const Token* tokens, int tokenCount, int *position) {	
 	int startPos = *position;
 	if (*position >= tokenCount) {
